@@ -39,7 +39,7 @@
   (setf *marker-publisher*
         (roslisp:advertise "~semantic_map_markers" "visualization_msgs/Marker"))
   (setf *collision-object-publisher*
-        (roslisp:advertise "/collision_object" "arm_navigation_msgs/CollisionObject")))
+        (roslisp:advertise "/collision_object" "moveit_msgs/CollisionObject")))
 
 (register-ros-init-function init-semantic-map-collision-environment)
 
@@ -67,24 +67,25 @@
                              :pose (tf:pose->pose-stamped
                                     "/map" 0.0 pose)
                              :target-frame "/odom_combined")))
-          (moveit:register-collision-object
+          (cram-moveit:register-collision-object
            obj-name
            :primitive-shapes (list (roslisp:make-msg
                                     "shape_msgs/SolidPrimitive"
-                                    type 1
-                                    dimensions (vector
-                                                (x dimensions)
-                                                (y dimensions)
-                                                (z dimensions))))
+                                    :type (roslisp-msg-protocol:symbol-code
+                                           'shape_msgs-msg:solidprimitive :box)
+                                    :dimensions (vector
+                                                 (x dimensions)
+                                                 (y dimensions)
+                                                 (z dimensions))))
            :pose-stamped pose-stamped)
-          (moveit:add-collision-object obj-name))))))
+          (cram-moveit:add-collision-object obj-name))))))
 
 (defun remove-semantic-map-collision-objects ()
   (unless (> (hash-table-count *semantic-map-obj-cache*) 0)
     (init-semantic-map-obj-cache))
   (loop for objs being the hash-values of *semantic-map-obj-cache* do
     (dolist (obj objs)
-      (roslisp:publish
+      (roslisp:publish                  ; TODO: change into moveit:deregister or smt
        *collision-object-publisher*
        (roslisp:make-msg
         "arm_navigation_msgs/CollisionObject"
@@ -138,16 +139,17 @@
 (defun collision-object->msg (obj &optional (frame-id "/map"))
   (declare (type sem-map-obj obj))
   (declare (ignore frame-id))
-  (with-slots (pose dimensions) obj
-    (moveit:register-collision-object
+  (with-slots (pose dimensions) obj     ; TODO: this doesn't look correct
+    (cram-moveit:register-collision-object
      (make-collision-obj-name obj)
      :primitive-shapes (list (roslisp:make-msg
-                              "arm_navigation_msgs/Shape"
-                              type 1
-                              dimensions (vector
-                                          (x dimensions)
-                                          (y dimensions)
-                                          (z dimensions))))
+                              "shape_msgs/SolidPrimitive"
+                              :type (roslisp-msg-protocol:symbol-code
+                                     'shape_msgs-msg:solidprimitive :box)
+                              :dimensions (vector
+                                           (x dimensions)
+                                           (y dimensions)
+                                           (z dimensions))))
      :pose-stamped pose)))
 
 (defun make-collision-obj-name (obj)
