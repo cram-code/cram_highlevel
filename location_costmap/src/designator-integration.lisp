@@ -59,13 +59,20 @@
 
 (defun robot-current-pose-generator (desig)
   (declare (ignore desig))
-  (list (cl-tf2:ensure-pose-stamped-transformed
-         *tf2*
-         (tf:make-pose-stamped
-          "/base_footprint" (roslisp:ros-time)
-          (tf:make-identity-vector)
-          (tf:make-identity-rotation))
-         "/map")))
+  (when *tf2-buffer*
+    (handler-case
+        (let ((robot-pose
+                (cl-tf2:transform-pose
+                 *tf2-buffer*
+                 :pose (cl-tf-datatypes:make-pose-stamped
+                        designators-ros:*robot-base-frame*
+                        (roslisp:ros-time)
+                        (cl-transforms:make-identity-vector)
+                        (cl-transforms:make-identity-rotation))
+                 :target-frame designators-ros:*fixed-frame*
+                 :timeout cram-roslisp-common:*tf-default-timeout*)))
+          (list robot-pose))
+      (cl-tf2:tf2-server-error () nil))))
 
 (defun location-costmap-generator (desig)
   (let ((costmap (get-cached-costmap desig)))
@@ -77,29 +84,30 @@
         nil))))
 
 (defun location-costmap-pose-validator (desig pose)
-  (when (typep pose 'cl-transforms:pose)
-    (let* ((cm (get-cached-costmap desig))
-           (p (cl-transforms:origin pose)))
-      (unless cm
-        (return-from location-costmap-pose-validator :unknown))
-      (handler-case
-          (let ((costmap-value (/ (get-map-value
-                                   cm
-                                   (cl-transforms:x p)
-                                   (cl-transforms:y p))
-                                  (get-cached-costmap-maxvalue cm)))
-                (costmap-heights (generate-heights
-                                  cm (cl-transforms:x p) (cl-transforms:y p))))
-            (when (> costmap-value *costmap-valid-solution-threshold*)
-              (cond ((not costmap-heights)
-                     :accept)
-                    ((find-if (lambda (height)
-                                (< (abs (- height (cl-transforms:z p)))
-                                   1e-3))
-                              costmap-heights)
-                     :accept))))
-        (cma:invalid-probability-distribution ()
-          :maybe-reject)))))
+  (if (typep pose 'cl-transforms:pose)
+      (let* ((cm (get-cached-costmap desig))
+             (p (cl-transforms:origin pose)))
+        (unless cm
+          (return-from location-costmap-pose-validator :unknown))
+        (handler-case
+            (let ((costmap-value (/ (get-map-value
+                                     cm
+                                     (cl-transforms:x p)
+                                     (cl-transforms:y p))
+                                    (get-cached-costmap-maxvalue cm)))
+                  (costmap-heights (generate-heights
+                                    cm (cl-transforms:x p) (cl-transforms:y p))))
+              (when (> costmap-value *costmap-valid-solution-threshold*)
+                (cond ((not costmap-heights)
+                       :accept)
+                      ((find-if (lambda (height)
+                                  (< (abs (- height (cl-transforms:z p)))
+                                     1e-3))
+                                costmap-heights)
+                       :accept))))
+          (cma:invalid-probability-distribution ()
+            :maybe-reject)))
+      :unknown))
 
 (register-location-generator
  15 robot-current-pose-generator
