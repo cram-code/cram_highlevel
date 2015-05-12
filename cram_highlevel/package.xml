@@ -31,7 +31,6 @@
   <run_depend>semantic_map_collision_environment/</run_depend>
   <run_depend>semantic_map_costmap/</run_depend>
   <run_depend>cl_semantic_map_utils/</run_depend>
-  <run_depend>cffi_ros_utils/</run_depend>
   <run_depend>cram_manipulation_knowledge/</run_depend>
   <run_depend>cram_physics_utils/</run_depend>
   <run_depend>cram_plan_actionserver/</run_depend>
